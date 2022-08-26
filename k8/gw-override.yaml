@@ -1,0 +1,53 @@
+---
+apiVersion: install.istio.io/v1alpha1
+kind: IstioOperator
+metadata:
+  name: test
+
+spec:
+  profile: empty
+  components: 
+    ingressGateways: 
+    - name: istio-ingressgateway
+      enabled: false
+
+    - name: test-gw
+      namespace: changeme
+      enabled: true
+      label: 
+        istio: test-gw
+        
+      k8s:
+        podAnnotations:
+          proxy.istio.io/config: |
+            discoveryAddress: istiod-REVISION.istio-system.svc:15012      
+
+        ## use istio generated certs to expose https on gw for testing
+        env:
+        - name: OUTPUT_CERTS
+          value: /etc/istio/ingressgateway-certs
+        overlays:
+        - apiVersion: apps/v1
+          kind: Deployment
+          name: test-gw
+          patches:
+          - path: spec.template.spec.volumes[name:ingressgateway-certs]
+            value:
+              name: ingressgateway-certs
+              emptyDir: {}
+
+          - path: spec.template.spec.containers.[name:istio-proxy].volumeMounts[name:ingressgateway-certs]
+            value:
+              name: ingressgateway-certs
+              mountPath: /etc/istio/ingressgateway-certs
+
+        service:
+          type: LoadBalancer
+          ports:
+          - port: 80
+            name: http
+            targetPort: 8080
+          - port: 443
+            name: https
+            targetPort: 8443
+
